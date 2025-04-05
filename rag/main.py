@@ -1,5 +1,7 @@
 import PyPDF2
 from uuid import uuid4
+from langchain.prompts import PromptTemplate
+from langchain.chains import RetrievalQA
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_aws import BedrockEmbeddings, BedrockLLM
 from langchain_pinecone import PineconeVectorStore
@@ -14,6 +16,16 @@ class PDFRag:
     def __init__(self, name: str = "1_pdf.pdf", index_name: str = "langchain-test-index"):
         self.doc_name = name
         self.pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
+        self.QA_PROMPT = PromptTemplate(
+    template="""You are an AI assistant. Answer the question using ONLY the provided context.
+If the answer is not in the context, respond with: "I don't know."
+
+Context:
+{context}
+
+Question: {question}""",
+    input_variables=["context", "question"]
+)
         
         self.embeddings = BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0")
         self.llm = BedrockLLM(
@@ -23,18 +35,18 @@ class PDFRag:
                 "max_tokens_to_sample": 2048
             }
         )
-        
-        # Initialize Pinecone index
         self.index = self.pc.Index(index_name)
         self.vector_store = PineconeVectorStore(index=self.index, embedding=self.embeddings)
         
-        # Create QA chain
         self.qa_chain = RetrievalQA.from_chain_type(
-            llm=self.llm,
-            chain_type="stuff",
-            retriever=self.vector_store.as_retriever(search_kwargs={"k": 3}),
-            return_source_documents=True
-        )
+    llm=self.llm,
+    chain_type="stuff",
+    retriever=self.vector_store.as_retriever(search_kwargs={"k": 3}),
+    return_source_documents=True,
+    chain_type_kwargs={
+        "prompt": self.QA_PROMPT
+    }
+)
 
     def __extract_text_from_pdf(self, pdf_path):
         with open(pdf_path, 'rb') as file:
@@ -72,85 +84,7 @@ class PDFRag:
             })
         }
 
-
-def main():
-    st.set_page_config(
-        page_title="PDF AI Assistant",
-        page_icon="📄",
-        layout="centered"
-    )
-    
-    st.markdown("""
-    <style>
-    .stTextInput input {
-        border-radius: 20px;
-        padding: 15px;
-    }
-    .stButton button {
-        background: linear-gradient(45deg, #4CAF50, #45a049);
-        color: white;
-        border-radius: 15px;
-        padding: 10px 24px;
-    }
-    .stMarkdown {
-        padding: 15px;
-        border-radius: 10px;
-        background: #f0f2f6;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    with st.sidebar:
-        st.title("📂 Document Management")
-        uploaded_files = st.file_uploader(
-            "Upload PDF documents",
-            type=["pdf"],
-            accept_multiple_files=True
-        )
-        
-        if uploaded_files:
-            if st.button("Process Documents", use_container_width=True):
-                with st.spinner("Analyzing documents..."):
-                    for uploaded_file in uploaded_files:
-                        with open(uploaded_file.name, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        rag = PDFRag(name=uploaded_file.name)
-                        rag.store_embeddings()
-                        os.remove(uploaded_file.name)
-                st.success("Documents processed successfully!")
-
-    st.title("📄 PDF AI Assistant")
-    st.caption("Ask anything about your uploaded documents")
-    
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-    
-    if prompt := st.chat_input("Type your question here..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
-        rag = PDFRag()
-        response = rag.get_qa_response(prompt)
-        
-        with st.chat_message("assistant"):
-            st.markdown(response["answer"])
-            with st.expander("View Sources"):
-                if response["sources"]:
-                    for source in response["sources"]:
-                        st.markdown(f"📄 {source}")
-                else:
-                    st.warning("No sources found")
-        
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": response["answer"]
-        })
-
 if __name__ == "__main__":
-    main()
+    rag = PDFRag()
+    text = "how to register for a diploma course"
+    print(rag.get_qa_response(text))
