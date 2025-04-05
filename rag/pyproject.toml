@@ -1,0 +1,15 @@
+[project]
+name = "rag"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "awscli>=1.38.28",
+    "langchain>=0.3.23",
+    "langchain-aws>=0.2.18",
+    "langchain-pinecone>=0.2.4",
+    "pinecone>=6.0.2",
+    "pypdf2>=3.0.1",
+    "streamlit>=1.44.1",
+]
