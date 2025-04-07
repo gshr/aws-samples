@@ -11,5 +11,6 @@ dependencies = [
     "langchain-pinecone>=0.2.4",
     "pinecone>=6.0.2",
     "pypdf2>=3.0.1",
+    "ruff>=0.11.4",
     "streamlit>=1.44.1",
 ]
